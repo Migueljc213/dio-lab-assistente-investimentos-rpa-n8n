@@ -1,0 +1,254 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clientes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "339f74d2-233b-401f-a4b3-7fa117574702",
+      "name": "Webhook",
+      "webhookId": "2d809252-83bc-4337-8545-8e9378c9aef8"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1648,
+        96
+      ],
+      "id": "7e71ca82-9e01-47f8-9032-c09054c0f52d",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        144
+      ],
+      "id": "b0917bb7-82d3-407c-bbd4-2daf6e7fdc23",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const csvRaw = $json.data ?? $json.body ?? $json;\nconst text = (typeof csvRaw === \"string\") ? csvRaw : JSON.stringify(csvRaw);\n\nconst lines = text.split(/\\r?\\n/).map(l => l.trim()).filter(Boolean);\nconst headers = lines[0].split(\",\").map(h => h.trim());\n\nconst investimentos = lines.slice(1).map(line => {\n  const cols = line.split(\",\").map(c => c.trim());\n  const obj = {};\n  \n  headers.forEach((h, i) => obj[h] = cols[i] ?? \"\");\n\n  // normaliza mínimo para número\n  obj.minimo = Number(String(obj.minimo).replace(/[^\\d]/g, \"\")) || 0;\n\n  return obj;\n});\n\nreturn [{ json: { investimentos } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        144
+      ],
+      "id": "e44ccb14-5d74-4a13-821a-9c8bbfd7b70c",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        624,
+        -48
+      ],
+      "id": "8eee125f-5228-4955-9fd9-7f9858037a8a",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apanha os dados de entrada do n8n\nconst items = $input.all();\nconst dadosEntrada = items[0].json;\n\n// Se os dados estiverem dentro de um array ou propriedade específica, ajustamos:\nconst listaInvestimentos = Array.isArray(dadosEntrada) \n  ? dadosEntrada \n  : (dadosEntrada.investimentos || dadosEntrada.data || []);\n\n// Mensagens estáticas baseadas no perfil (MVP)\nconst templatesMensagem = {\n  \"Conservador\": \"Olá! Com base no seu perfil Conservador, preparamos uma seleção com foco em renda fixa e segurança para proteger o seu patrimônio.\",\n  \"Moderado\": \"Olá! Com base no seu perfil Moderado, selecionamos um mix equilibrado entre renda fixa e variável para potenciar os seus ganhos com controlo de risco.\",\n  \"Arrojado\": \"Olá! Com base no seu perfil Arrojado, destacamos oportunidades com ênfase em ações e maior potencial de retorno para o longo prazo.\"\n};\n\n// Agrupar os produtos por perfil\nconst agrupadosPorPerfil = {};\n\nlistaInvestimentos.forEach(item => {\n  const perfil = item.perfil || \"Moderado\";\n  if (!agrupadosPorPerfil[perfil]) {\n    agrupadosPorPerfil[perfil] = {\n      perfil: perfil,\n      mensagem: templatesMensagem[perfil] || \"Aqui estão as opções de investimento recomendadas para o seu perfil.\",\n      produtos: []\n    };\n  }\n  \n  agrupadosPorPerfil[perfil].produtos.push({\n    produto: item.produto,\n    minimo: item.minimo,\n    rentabilidade: item.rentabilidade\n  });\n});\n\n// Converter o objeto agrupado de volta para o formato de array aceitado pelo n8n\nconst resultadoFinal = Object.values(agrupadosPorPerfil).map(grupo => {\n  return { json: grupo };\n});\n\nreturn resultadoFinal;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        96
+      ],
+      "id": "ed795cd2-ddde-48f7-b42d-539c9d0029a3",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Você é um Assessor de Investimentos especialista, empático, didático e transparente.\nSua missão é analisar os dados do cliente e a lista de produtos disponíveis para gerar uma mensagem única, humanizada e altamente personalizada com recomendações de investimento.\n\n---\n\n### DADOS DO CLIENTE\n- Perfil do Cliente: {{ $json.perfil }}\n- Saldo / Valor Disponível: R${{$json.saldo }}\n\n### PRODUTOS DISPONÍVEIS\n{{ JSON.stringify($json.produtos) }}\n\n---\n\n### DIRETRIZES DE ESTILO E LINGUAGEM DE ACORDO COM O PERFIL:\n1. **Conservador**: Transmita segurança, estabilidade e proteção patrimonial. Destaque a previsibilidade da Renda Fixa.\n2. **Moderado**: Transmita equilíbrio, diversificação e crescimento controlado. Explique a combinação de segurança com potencial de ganho.\n3. **Arrojado**: Transmita dinamismo, foco no longo prazo e busca por alta rentabilidade. Esteja atento ao controle de riscos e volatilidade.\n\n---\n\n### REGRAS DE NEGÓCIO E FILTRAGEM:\n1. **Acessibilidade Financeira**: Destaque prioritariamente os produtos cujo valor `minimo` seja MENOR ou IGUAL ao saldo disponível do cliente (R${{$json.saldo }}). Se o saldo for menor que o valor mínimo de um produto, avise educadamente que aquele produto exige um aporte maior.\n2. **Adequação ao Perfil**: Selecione e recomende os produtos que fazem mais sentido para o perfil do cliente.\n3. **Humanização**: Evite termos técnicos exagerados sem explicação simples. Use uma saudação calorosa e uma linguagem conversacional.\n4. **Estrutura da Resposta**:\n   - **Saudação e Diagnóstico**: Acolha o cliente e valide o momento financeiro dele com base no perfil e saldo.\n   - **Recomendações Personalizadas**: Apresente 1 a 3 opções de investimento com o porquê de cada escolha.\n   - **Próximo Passo / Chamada para Ação (CTA)**: Convide o cliente a tirar dúvidas ou confirmar a aplicação.\n\n---\n\n### FORMATO DE SAÍDA:\nRetorne a resposta diretamente em texto formatado com Markdown (usando negritos e tópicos para facilitar a leitura no WhatsApp ou e-mail). Não utilize saudações genéricas como \"Estimado cliente\"."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        96
+      ],
+      "id": "011a39e4-3feb-4d01-b984-fcc29842af44",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Merge').item.json.body.clientes[0].email }}",
+        "subject": "=",
+        "message": "={{ $json.output[0].content[0].text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        96
+      ],
+      "id": "ed94d999-c264-45b6-bb78-f535e6590bcd",
+      "name": "Send a message",
+      "webhookId": "ff763fd1-8b8f-4020-8095-f288b1c11340",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "kyc1S8Ad7D2dKH6K",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "7489fac6-c193-47a3-bf05-43caeee154c7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b01557c59ff21eb15cd6271eb895a0bdef5708225a5e33bea14568147e3eff85"
+  },
+  "nodeGroups": [],
+  "id": "jI9DXXbNgaVIVNxe",
+  "tags": []
+}
